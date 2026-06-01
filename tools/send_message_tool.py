@@ -402,9 +402,20 @@ def _parse_target_ref(platform_name: str, target_ref: str):
     if platform_name in _PHONE_PLATFORMS:
         match = _E164_TARGET_RE.fullmatch(target_ref)
         if match:
-            # Preserve the leading '+' — signal-cli and sms/whatsapp adapters
+            if platform_name == "whatsapp":
+                # WhatsApp/Baileys needs full JID format; strip '+' and suffix.
+                return f"{match.group(1)}@s.whatsapp.net", None, True
+            # Preserve the leading '+' — signal-cli and sms adapters
             # expect E.164 format for direct recipients.
             return target_ref.strip(), None, True
+    if platform_name == "whatsapp" and target_ref.lstrip("-").isdigit():
+        # Baileys requires full JID format (e.g. 94777795115@s.whatsapp.net),
+        # bare digits fail jidDecode. Normalize here so callers can pass
+        # plain phone numbers like "whatsapp:94777795115".
+        return f"{target_ref.strip()}@s.whatsapp.net", None, True
+    if platform_name == "whatsapp" and ("@s.whatsapp.net" in target_ref or target_ref.endswith(("@g.us", "@lid", "@broadcast"))):
+        # Already a valid WhatsApp JID — pass through, don't resolve via channel directory.
+        return target_ref.strip(), None, True
     if target_ref.lstrip("-").isdigit():
         return target_ref, None, True
     # Matrix room IDs (start with !) and user IDs (start with @) are explicit
